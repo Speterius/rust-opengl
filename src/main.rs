@@ -1,10 +1,42 @@
 use glium::{glutin, Surface};
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 const WIDTH: u32 = 900;
 const HEIGHT: u32 = 700;
 const TIME_PER_FRAME: u64 = 16_666_667;
 
+type Scalar = f64;
+
+#[derive(Copy, Clone)]
+struct Vertex {
+    position: [Scalar; 2],
+}
+
+glium::implement_vertex!(Vertex, position);
+
+fn define_shaders() -> (String, String) {
+    let vertex_shader: String = String::from(
+        r#"
+        #version 140
+        in vec2 position;
+        void main() {
+            gl_Position = vec4(position, 0.0, 1.0);
+        }
+    "#,
+    );
+
+    let fragment_shader: String = String::from(
+        r#"
+        #version 140
+        out vec4 color;
+        void main() {
+            color = vec4(1.0, 0.0, 0.0, 1.0);
+        }
+    "#,
+    );
+
+    (vertex_shader, fragment_shader)
+}
 
 fn main() {
     println!("Initializing GLIUM window context.");
@@ -25,28 +57,59 @@ fn main() {
 
     // Infinite loop to keep the program running
     event_loop.run(move |ev, _, control_flow| {
-
-        // Render stuff:
-        let mut target = display.draw();
-        target.clear_color(0.1, 0.19, 0.43, 1.0);
-        target.finish().unwrap();
-
         // Limit flow to 60 FPS
         let next_frame_time = Instant::now() + Duration::from_nanos(TIME_PER_FRAME);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
         // Handle events
         match ev {
-            glutin::event::Event::WindowEvent {event, ..} => {
-                match event {
-                    glutin::event::WindowEvent::CloseRequested => {
-                        *control_flow = glutin::event_loop::ControlFlow::Exit;
-                        return;
-                    },
-                    _ => return
+            glutin::event::Event::WindowEvent { event, .. } => match event {
+                glutin::event::WindowEvent::CloseRequested => {
+                    *control_flow = glutin::event_loop::ControlFlow::Exit;
+                    return;
                 }
+                _ => return,
             },
-            _ => {},
+            _ => {}
         }
+
+        // Render stuff:
+        let mut target = display.draw();
+
+        // Clear screen to blue:
+        target.clear_color(0.1, 0.19, 0.43, 1.0);
+
+        // Define triangle
+        let vertex1 = Vertex {
+            position: [-0.5, -0.5],
+        };
+        let vertex2 = Vertex {
+            position: [0.0, 0.5],
+        };
+        let vertex3 = Vertex {
+            position: [0.5, -0.25],
+        };
+        let shape = vec![vertex1, vertex2, vertex3];
+        let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
+        let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+
+        // Shaders:
+        let (vertex_shader, fragment_shader) = define_shaders();
+        let program =
+            glium::Program::from_source(&display, &vertex_shader, &fragment_shader, None).unwrap();
+
+        // Draw call:
+        target
+            .draw(
+                &vertex_buffer,
+                &indices,
+                &program,
+                &glium::uniforms::EmptyUniforms,
+                &Default::default(),
+            )
+            .unwrap();
+
+        // Swapchain:
+        target.finish().unwrap();
     });
 }
