@@ -1,18 +1,21 @@
 mod consts;
+mod teapot;
 mod types;
 
 pub use cgmath::{Deg, PerspectiveFov, Rad};
 pub use consts::*;
-pub use glium::uniforms::{EmptyUniforms, UniformsStorage};
-pub use glium::{glutin, Display, DrawParameters, Frame, Program, Surface};
+pub use glium::{
+    glutin, Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer,
+};
 pub use glutin::event_loop::EventLoop;
 pub use std::time::{Duration, Instant};
+use teapot::{INDICES, NORMALS, VERTICES};
 pub use types::*;
 
 const WIDTH: u32 = 900;
 const HEIGHT: u32 = 700;
-const FOV: u32 = 90;
 const TIME_PER_FRAME: u64 = 16_666_667;
+const DEPTH_BUFFER: u8 = 24;
 
 #[derive(Copy, Clone)]
 pub struct Color {
@@ -21,41 +24,19 @@ pub struct Color {
     b: Scalar,
 }
 
-/// Initalize a glium Frame object with a specified background Color
-fn init_frame(display: &Display, color: Color) -> Frame {
-    let mut frame = display.draw();
-    frame.clear_color(color.r, color.g, color.b, 1.0);
-    frame.clear_depth(1.0);
-    frame
+#[derive(Copy, Clone, Debug)]
+pub struct Vertex {
+    position: (Scalar, Scalar, Scalar),
 }
 
-/// Reads the GLSL files as &str and feeds them to glium::Program
-fn define_shaders(display: &glium::Display) -> Program {
-    let v_shader = include_str!("vertex_shader.glsl");
-    let f_shader = include_str!("fragment_shader.glsl");
-    Program::from_source(display, &v_shader, &f_shader, None).expect("Couldn't compile shaders.")
+glium::implement_vertex!(Vertex, position);
+
+#[derive(Copy, Clone, Debug)]
+pub struct Normal {
+    normal: (Scalar, Scalar, Scalar),
 }
 
-/// Builds the frame dependent Uniforms that the shaders use:
-/// At the moment it's the matrix4 view transform.
-fn build_uniforms(frame: &Frame) -> FrameUniforms {
-    let (width, height) = frame.get_dimensions();
-
-    let projection = PerspectiveFov::<Scalar> {
-        fovy: Rad::<Scalar>::from(Deg::<Scalar>(FOV as f32)),
-        aspect: width as Scalar / height as Scalar,
-        near: 1.0,
-        far: 1e3,
-    };
-
-    let view = Matrix4::from_translation(Vector3::new(0.0, 0.0, -10.0));
-
-    let matrix = (Matrix4::from(projection) * view).into();
-
-    glium::uniform! {
-        matrix: matrix
-    }
-}
+glium::implement_vertex!(Normal, normal);
 
 fn setup(
     width: u32,
@@ -83,7 +64,6 @@ fn setup(
 
     // Draw parameters:
     let draw_params = DrawParameters {
-        backface_culling: glium::BackfaceCullingMode::CullClockwise,
         depth: glium::Depth {
             test: glium::draw_parameters::DepthTest::IfLess,
             write: true,
@@ -95,24 +75,98 @@ fn setup(
     (display, event_loop, program, draw_params)
 }
 
-fn render(display: &Display) {
+/// Reads the GLSL files as &str and feeds them to glium::Program
+fn define_shaders(display: &glium::Display) -> Program {
+    let v_shader = include_str!("vertex_shader.glsl");
+    let f_shader = include_str!("fragment_shader.glsl");
+    Program::from_source(display, &v_shader, &f_shader, None).expect("Couldn't compile shaders.")
+}
+
+/// Builds the frame specific matrix4 transform:
+fn build_view_matrix(width: u32, height: u32, fov_deg: f32) -> [[f32; 4]; 4] {
+    let fov = fov_deg * std::f32::consts::PI / 180.0;
+    let aspect_ratio = height as Scalar / width as Scalar;
+    let zfar = 1024.0;
+    let znear = 0.1;
+    let f = 1.0 / (fov / 2.0).tan();
+
+    [
+        [f * aspect_ratio, 0.0, 0.0, 0.0],
+        [0.0, f, 0.0, 0.0],
+        [0.0, 0.0, (zfar + znear) / (zfar - znear), 1.0],
+        [0.0, 0.0, -(2.0 * zfar * znear) / (zfar - znear), 0.0],
+    ]
+}
+
+/// Initalize a glium Frame object with a specified background Color
+fn init_frame(display: &Display, color: Color) -> Frame {
+    let mut frame = display.draw();
+    frame.clear_color_and_depth((color.r, color.g, color.b, 1.0), 1.0);
+    frame
+}
+
+fn render(display: &Display, obj: &Object, program: &Program, draw_params: &DrawParameters) {
     // Render stuff:
-    let frame = init_frame(display, BLUE);
-    let _uniforms = build_uniforms(&frame);
+    let mut frame = init_frame(display, BLACK);
+    let (width, height) = frame.get_dimensions();
+    let perspective = build_view_matrix(width, height, 60.0);
+    let light = [-1.0, 0.4, 0.9f32];
+
+    let u_matrix = [
+        [0.01, 0.0, 0.0, 0.0],
+        [0.0, 0.01, 0.0, 0.0],
+        [0.0, 0.0, 0.01, 0.0],
+        [0.0, 0.0, 5.0, 1.0f32],
+    ];
+
+    let uniforms = glium::uniform! {
+        u_matrix: u_matrix,
+        u_light: light,
+        perspective: perspective
+    };
 
     // Draw calls:
-    // frame
-    //     .draw(&cuboid, &cuboid, &program, &uniforms, &draw_params)
-    //     .expect("Failed to draw cube.");
+    frame
+        .draw(
+            (&obj.vertex_bfr, &obj.normal_bfr),
+            &obj.ind_bfr,
+            program,
+            &uniforms,
+            draw_params,
+        )
+        .expect("Failed to draw object");
 
     // Swapchain:
     frame.finish().expect("Failed to draw frame");
 }
 
-fn main() {
-    let (display, event_loop, program, draw_params) =
-        setup(WIDTH, HEIGHT, "OpenGl Hello World.", 16);
+struct Object {
+    vertex_bfr: VertexBuffer<Vertex>,
+    normal_bfr: VertexBuffer<Normal>,
+    ind_bfr: IndexBuffer<u16>,
+}
 
+impl Object {
+    fn new(display: &Display, vert: &[Vertex], norm: &[Normal], ind: &[u16]) -> Self {
+        Self {
+            vertex_bfr: VertexBuffer::new(display, vert).expect("Couldn't allocate Vertex Buffer."),
+            normal_bfr: VertexBuffer::new(display, norm)
+                .expect("Couldn't allocate Vertex Buffer for normals."),
+            ind_bfr: IndexBuffer::new(display, glium::index::PrimitiveType::TrianglesList, ind)
+                .expect("Couldn't allocate Index buffer"),
+        }
+    }
+}
+
+fn main() {
+    // Display setup:
+    let (display, event_loop, program, draw_params) =
+        setup(WIDTH, HEIGHT, "OpenGl Hello World.", DEPTH_BUFFER);
+
+    // Allocate teapot:
+    let teapot = Object::new(&display, &VERTICES, &NORMALS, &INDICES);
+
+    // Main loop:
     event_loop.run(move |ev, _, control_flow| {
         // Limit frame rate
         let next_frame_time = Instant::now() + Duration::from_nanos(TIME_PER_FRAME);
@@ -131,6 +185,6 @@ fn main() {
         }
 
         // Do the rendering
-        render(&display);
+        render(&display, &teapot, &program, &draw_params);
     });
 }
