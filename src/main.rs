@@ -2,11 +2,10 @@ mod consts;
 mod teapot;
 mod types;
 
-pub use cgmath::{Deg, PerspectiveFov, Rad};
 pub use consts::*;
-pub use glium::{
-    glutin, Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer,
-};
+pub use glium::{glutin, Display, DrawParameters, Program, ProgramCreationError};
+pub use glium::{implement_vertex, uniform};
+pub use glium::{Frame, IndexBuffer, Surface, VertexBuffer};
 pub use glutin::event_loop::EventLoop;
 pub use std::time::{Duration, Instant};
 use teapot::{INDICES, NORMALS, VERTICES};
@@ -14,29 +13,8 @@ pub use types::*;
 
 const WIDTH: u32 = 900;
 const HEIGHT: u32 = 700;
-const TIME_PER_FRAME: u64 = 16_666_667;
+const TIME_PER_FRAME: u64 = (1.0 / 60.0) as u64;
 const DEPTH_BUFFER: u8 = 24;
-
-#[derive(Copy, Clone)]
-pub struct Color {
-    r: Scalar,
-    g: Scalar,
-    b: Scalar,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct Vertex {
-    position: (Scalar, Scalar, Scalar),
-}
-
-glium::implement_vertex!(Vertex, position);
-
-#[derive(Copy, Clone, Debug)]
-pub struct Normal {
-    normal: (Scalar, Scalar, Scalar),
-}
-
-glium::implement_vertex!(Normal, normal);
 
 fn setup(
     width: u32,
@@ -57,10 +35,10 @@ fn setup(
 
     // Display object: OpenGL window
     let display = glium::Display::new(window_builder, context_builder, &event_loop)
-        .expect("Failed to build glium display.");
+        .expect("Failed to build GLIUM display.");
 
     // Define the shaders:
-    let program = define_shaders(&display);
+    let program = define_shaders(&display).expect("Failed to compile shaders.");
 
     // Draw parameters:
     let draw_params = DrawParameters {
@@ -77,10 +55,10 @@ fn setup(
 }
 
 /// Reads the GLSL files as &str and feeds them to glium::Program
-fn define_shaders(display: &glium::Display) -> Program {
+fn define_shaders(display: &glium::Display) -> Result<Program, ProgramCreationError> {
     let v_shader = include_str!("vertex_shader.glsl");
     let f_shader = include_str!("fragment_shader.glsl");
-    Program::from_source(display, &v_shader, &f_shader, None).expect("Couldn't compile shaders.")
+    Program::from_source(display, &v_shader, &f_shader, None)
 }
 
 /// Builds the frame specific matrix4 transform:
@@ -108,9 +86,11 @@ fn build_view_matrix(position: &[f32; 3], direction: &[f32; 3], up: &[f32; 3]) -
         [f[0] / len, f[1] / len, f[2] / len]
     };
 
-    let s = [up[1] * f[2] - up[2] * f[1],
-             up[2] * f[0] - up[0] * f[2],
-             up[0] * f[1] - up[1] * f[0]];
+    let s = [
+        up[1] * f[2] - up[2] * f[1],
+        up[2] * f[0] - up[0] * f[2],
+        up[0] * f[1] - up[1] * f[0],
+    ];
 
     let s_norm = {
         let len = s[0] * s[0] + s[1] * s[1] + s[2] * s[2];
@@ -118,13 +98,17 @@ fn build_view_matrix(position: &[f32; 3], direction: &[f32; 3], up: &[f32; 3]) -
         [s[0] / len, s[1] / len, s[2] / len]
     };
 
-    let u = [f[1] * s_norm[2] - f[2] * s_norm[1],
-             f[2] * s_norm[0] - f[0] * s_norm[2],
-             f[0] * s_norm[1] - f[1] * s_norm[0]];
+    let u = [
+        f[1] * s_norm[2] - f[2] * s_norm[1],
+        f[2] * s_norm[0] - f[0] * s_norm[2],
+        f[0] * s_norm[1] - f[1] * s_norm[0],
+    ];
 
-    let p = [-position[0] * s_norm[0] - position[1] * s_norm[1] - position[2] * s_norm[2],
-             -position[0] * u[0] - position[1] * u[1] - position[2] * u[2],
-             -position[0] * f[0] - position[1] * f[1] - position[2] * f[2]];
+    let p = [
+        -position[0] * s_norm[0] - position[1] * s_norm[1] - position[2] * s_norm[2],
+        -position[0] * u[0] - position[1] * u[1] - position[2] * u[2],
+        -position[0] * f[0] - position[1] * f[1] - position[2] * f[2],
+    ];
 
     [
         [s_norm[0], u[0], f[0], 0.0],
@@ -133,7 +117,6 @@ fn build_view_matrix(position: &[f32; 3], direction: &[f32; 3], up: &[f32; 3]) -
         [p[0], p[1], p[2], 1.0],
     ]
 }
-
 
 /// Initalize a glium Frame object with a specified background Color
 fn init_frame(display: &Display, color: Color) -> Frame {
@@ -216,15 +199,14 @@ fn main() {
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
         // Handle events
-        match ev {
-            glutin::event::Event::WindowEvent { event, .. } => match event {
+        if let glutin::event::Event::WindowEvent { event, .. } = ev {
+            match event {
                 glutin::event::WindowEvent::CloseRequested => {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
                     return;
                 }
                 _ => return,
-            },
-            _ => {}
+            }
         }
 
         // Do the rendering
