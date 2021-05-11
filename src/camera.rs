@@ -1,15 +1,14 @@
-use crate::{Scalar, Vector3, Unit, normalize};
 use crate::consts::*;
-
+use crate::{normalize, Scalar, Unit, Vector3};
 
 struct ClippingPlanes {
     near: Scalar,
-    far: Scalar
+    far: Scalar,
 }
 
 impl ClippingPlanes {
     pub fn new(near: Scalar, far: Scalar) -> Self {
-        Self {near, far}
+        Self { near, far }
     }
 }
 
@@ -19,7 +18,7 @@ pub struct Camera {
     resolution: (u32, u32),
     fov: u32,
     aspect_ratio: Scalar,
-    clipping_planes: ClippingPlanes
+    clipping_planes: ClippingPlanes,
 }
 
 impl Camera {
@@ -30,7 +29,7 @@ impl Camera {
             resolution,
             fov,
             aspect_ratio: resolution.0 as Scalar / resolution.1 as Scalar,
-            clipping_planes: ClippingPlanes::new(0.1, 1024.0)
+            clipping_planes: ClippingPlanes::new(0.1, 1024.0),
         }
     }
 
@@ -41,7 +40,6 @@ impl Camera {
 
     /// Builds a frame specific perspective transform
     pub fn get_perspective_matrix(&self) -> [[f32; 4]; 4] {
-
         let fov = (self.fov as Scalar).to_radians();
         let f = 1.0 / (fov / 2.0).tan();
         let (znear, zfar) = (self.clipping_planes.near, self.clipping_planes.far);

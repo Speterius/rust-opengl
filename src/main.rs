@@ -1,19 +1,19 @@
+mod camera;
+mod common;
 mod consts;
 mod scene_object;
 mod teapot;
 mod types;
-mod camera;
-mod common;
 
-pub use consts::*;
-pub use common::*;
 pub use camera::Camera;
+pub use common::*;
+pub use consts::*;
 pub use glium::{glutin, Display, DrawParameters, Program, ProgramCreationError};
 pub use glium::{implement_vertex, uniform};
 pub use glium::{Frame, IndexBuffer, Surface, VertexBuffer};
 pub use glutin::dpi::LogicalSize;
-pub use glutin::event_loop::{EventLoop, ControlFlow};
-use glutin::event::{ElementState, Event, WindowEvent, KeyboardInput, VirtualKeyCode};
+use glutin::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+pub use glutin::event_loop::{ControlFlow, EventLoop};
 pub use glutin::window::WindowBuilder;
 pub use scene_object::SceneObject;
 pub use std::time::{Duration, Instant};
@@ -78,33 +78,42 @@ fn init_frame(display: &Display, color: Color) -> Frame {
     frame
 }
 
-fn render(frame: &mut Frame, obj: &SceneObject, camera: &Camera, program: &Program, draw_params: &DrawParameters) {
-
-    // Generate the model, view and perspective matrices:
+fn render(
+    frame: &mut Frame,
+    object_list: &[Box<SceneObject>],
+    camera: &Camera,
+    program: &Program,
+    draw_params: &DrawParameters,
+) {
+    // Camera stuff:
     let perspective = camera.get_perspective_matrix();
     let view = camera.get_view_matrix();
-    let model = obj.get_model_matrix();
 
-    // Add a light source:
+    // Light stuff:
     let light = [-1.0, 0.4, 0.9f32];
 
-    let uniforms = glium::uniform! {
-        model: model,
-        view: view,
-        perspective: perspective,
-        u_light: light
-    };
+    // Object dependent stuff:
+    for obj in object_list {
 
-    // Draw calls:
-    frame
-        .draw(
-            (&obj.vertex_bfr, &obj.normal_bfr),
-            &obj.ind_bfr,
-            program,
-            &uniforms,
-            draw_params,
-        )
-        .expect("Failed to draw object");
+        let model = obj.get_model_matrix();
+
+        let uniforms = glium::uniform! {
+            model: model,
+            view: view,
+            perspective: perspective,
+            u_light: light
+        };
+
+        frame
+            .draw(
+                (&obj.vertex_bfr, &obj.normal_bfr),
+                &obj.ind_bfr,
+                program,
+                &uniforms,
+                draw_params,
+            )
+            .expect("Failed to draw object");
+    }
 }
 
 fn main() {
@@ -113,10 +122,18 @@ fn main() {
         setup(WIDTH, HEIGHT, "OpenGl Hello World.", DEPTH_BUFFER);
 
     // Allocate teapot:
-    let teapot = SceneObject::teapot(&display);
+    let teapot1 = SceneObject::teapot(&display);
+    let teapot2 = SceneObject::teapot(&display);
+
+    let mut object_list = vec![Box::new(teapot1), Box::new(teapot2)];
 
     // Make camera:
-    let mut camera = Camera::new(Vector3::new(0.0, -2.0, 2.0), Vector3::new(0.0, 1.0, -1.0), (WIDTH, HEIGHT), FOV);
+    let mut camera = Camera::new(
+        Vector3::new(0.0, -2.0, 2.0),
+        Vector3::new(0.0, 1.0, -1.0),
+        (WIDTH, HEIGHT),
+        FOV,
+    );
 
     // Main loop:
     event_loop.run(move |event, _, control_flow| {
@@ -127,21 +144,36 @@ fn main() {
         // Handle events
         match event {
             Event::LoopDestroyed => return,
-            Event::WindowEvent {event, .. } => match event {
-                WindowEvent::Resized(physical_size) => println!("Resize event"),
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::Resized(_physical_size) => (),
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::KeyboardInput {
-                    input: KeyboardInput { virtual_keycode: Some(virtual_code), state, .. },
-                    .. } => match (virtual_code, state) {
-                        (VirtualKeyCode::Escape, _) => *control_flow = ControlFlow::Exit,
-                        (VirtualKeyCode::W, ElementState::Pressed) => println!("Pressed W!"),
-                        _ => (),
-                    },
-                _ => ()
+                    input:
+                        KeyboardInput {
+                            virtual_keycode: Some(virtual_code),
+                            state,
+                            ..
+                        },
+                    ..
+                } => match (virtual_code, state) {
+                    (VirtualKeyCode::Escape, _) => *control_flow = ControlFlow::Exit,
+                    (VirtualKeyCode::W, ElementState::Pressed) => {
+                        println!("Pressed W");
+                        object_list[0].scale_up();
+                    }
+                    (VirtualKeyCode::S, ElementState::Pressed) => {
+                        println!("Pressed S");
+                        object_list[0].scale_down();
+                    }
+                    _ => (),
+                },
+                _ => (),
             },
             Event::RedrawRequested(_) => (),
             _ => return,
         }
+
+        /* Rendering process */
 
         let mut frame = init_frame(&display, BLACK);
 
@@ -149,7 +181,7 @@ fn main() {
         camera.update_resolution(frame.get_dimensions());
 
         // Do the rendering
-        render(&mut frame, &teapot, &camera, &program, &draw_params);
+        render(&mut frame, &object_list, &camera, &program, &draw_params);
 
         // Do the swapchain
         frame.finish().expect("Couldn't swap buffers.");

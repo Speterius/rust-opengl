@@ -1,17 +1,16 @@
 use crate::teapot::TEAPOT;
-use crate::{Display, IndexBuffer, Normal, Vertex, VertexBuffer, Vector3, Scalar};
-
+use crate::{Display, IndexBuffer, Normal, Scalar, Vector3, Vertex, VertexBuffer};
 
 pub struct Transform {
     position: Vector3,
-    scale: Scalar
+    pub(crate) scale: Scalar,
 }
 
 pub struct SceneObject {
     pub vertex_bfr: VertexBuffer<Vertex>,
     pub normal_bfr: VertexBuffer<Normal>,
     pub ind_bfr: IndexBuffer<u16>,
-    transform: Transform
+    pub(crate) transform: Transform,
 }
 
 impl SceneObject {
@@ -22,7 +21,10 @@ impl SceneObject {
                 .expect("Couldn't allocate Vertex Buffer for normals."),
             ind_bfr: IndexBuffer::new(display, glium::index::PrimitiveType::TrianglesList, ind)
                 .expect("Couldn't allocate Index buffer"),
-            transform: Transform {position: Vector3::zeros(), scale: 1.0}
+            transform: Transform {
+                position: Vector3::zeros(),
+                scale: 1.0,
+            },
         }
     }
 
@@ -36,6 +38,14 @@ impl SceneObject {
 
     pub fn set_scale(&mut self, scale: Scalar) {
         self.transform.scale = scale;
+    }
+
+    pub fn scale_up(&mut self) {
+        self.transform.scale *= 1.01;
+    }
+
+    pub fn scale_down(&mut self) {
+        self.transform.scale /= 1.01;
     }
 
     pub fn teapot(display: &Display) -> Self {
