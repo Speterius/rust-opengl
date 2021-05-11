@@ -2,7 +2,9 @@ use crate::{Normal, Vertex};
 
 // File used from: https://github.com/glium/glium/blob/master/book/tuto-07-teapot.rs
 
-pub const VERTICES: [Vertex; 531] = [
+pub const TEAPOT: ([Vertex; 531], [Normal; 531], [u16; 3072]) = (VERTICES, NORMALS, INDICES);
+
+const VERTICES: [Vertex; 531] = [
     Vertex {
         position: (0.0, 0.0, 0.0),
     }, // dummy vector because in the original model indices
@@ -1599,7 +1601,7 @@ pub const VERTICES: [Vertex; 531] = [
     },
 ];
 
-pub const NORMALS: [Normal; 531] = [
+const NORMALS: [Normal; 531] = [
     Normal {
         normal: (0.0, 0.0, 0.0),
     }, // dummy vector because in the original model indices
@@ -3196,7 +3198,7 @@ pub const NORMALS: [Normal; 531] = [
     },
 ];
 
-pub const INDICES: [u16; 3072] = [
+const INDICES: [u16; 3072] = [
     7, 6, 1, 1, 2, 7, 8, 7, 2, 2, 3, 8, 9, 8, 3, 3, 4, 9, 10, 9, 4, 4, 5, 10, 12, 11, 6, 6, 7, 12,
     13, 12, 7, 7, 8, 13, 14, 13, 8, 8, 9, 14, 15, 14, 9, 9, 10, 15, 17, 16, 11, 11, 12, 17, 18, 17,
     12, 12, 13, 18, 19, 18, 13, 13, 14, 19, 20, 19, 14, 14, 15, 20, 22, 21, 16, 16, 17, 22, 23, 22,

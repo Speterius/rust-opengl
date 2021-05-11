@@ -3,6 +3,7 @@ use crate::implement_vertex;
 pub type Scalar = f32;
 pub type Matrix4 = nalgebra::Matrix4<Scalar>;
 pub type Vector3 = nalgebra::Vector3<Scalar>;
+pub type Unit<T> = nalgebra::Unit<T>;
 
 #[derive(Copy, Clone)]
 pub struct Color {
@@ -13,7 +14,7 @@ pub struct Color {
 
 impl Color {
     pub const fn new(r: Scalar, g: Scalar, b: Scalar) -> Self {
-        Self {r, g, b}
+        Self { r, g, b }
     }
 }
 
