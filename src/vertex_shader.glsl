@@ -1,9 +1,15 @@
 #version 140
 
-in vec2 position;
-uniform float dx;
+in vec3 position;
+in vec3 normal;
+in vec3 texcoord;
+
+out vec3 v_normal;
+out vec2 v_texcoord;
+
+uniform mat4 matrix;
 
 void main() {
-    vec2 pos = position;
-    gl_Position = vec4(pos.x+dx, pos.y, 0.0, 1.0);
+    gl_Position = matrix * vec4(position, 1.0);
+    v_normal = normal;
 }
